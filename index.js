@@ -15,7 +15,14 @@ const {
 } = require('graphql');
 
 const { createVideo, getVideoById, getVideos } = require('./src/data');
-const identifiable = require('./src/identifiable')
+const {
+    globalIdField,
+    connectionDefinitions,
+    connectionFromPromisedArray,
+    connectionArgs,
+    mutationWithClientMutationId
+} = require('graphql-relay')
+const { nodeInterface, nodeField } = require('./src/node')
 
 const PORT = process.env.PORT || 3000;
 const server = express();
@@ -24,10 +31,7 @@ const videoType = new GraphQLObjectType({
     name: 'Video',
     description: 'The video Type description',
     fields: {
-        id: {
-            type: new GraphQLNonNull(GraphQLID),
-            description: 'the id of the video'
-        },
+        id: globalIdField(),
         title: {
             type: GraphQLString,
             description: 'the title of the video'
@@ -41,16 +45,35 @@ const videoType = new GraphQLObjectType({
             description: 'The video was watched or not'
         }
     },
-    interfaces: [identifiable]
+    interfaces: [nodeInterface]
 });
+exports.videoType = videoType;
+
+const {connectionType: VideoConnection } = connectionDefinitions({
+    nodeType: videoType,
+    connectionFields: () => ({
+        totalCount: {
+            type: GraphQLInt,
+            description: 'A count of total objects in this connection',
+            resolve: (conn) => {
+                return conn.edges.length;
+            }
+        }
+    })
+})
 
 const queryType = new GraphQLObjectType({
     name: 'QueryType',
     description: 'The root query Type',
     fields : {
+        node: nodeField,
         videos: {
-            type: new GraphQLList(videoType),
-            resolve: getVideos
+            type: VideoConnection,
+            args: connectionArgs,
+            resolve: (_, args) => connectionFromPromisedArray(
+                getVideos(),
+                args
+            )
         },
         video: {
             type: videoType,
@@ -67,9 +90,9 @@ const queryType = new GraphQLObjectType({
     }
 });
 
-const videoInputType = new GraphQLInputObjectType({
-    name: 'videoInput',
-    fields: {
+const videoMutation = mutationWithClientMutationId({
+    name: 'AddVideo',
+    inputFields: {
         title: {
             type: new GraphQLNonNull(GraphQLString),
             description: 'the title of the video'
@@ -82,24 +105,26 @@ const videoInputType = new GraphQLInputObjectType({
             type: new GraphQLNonNull(GraphQLBoolean),
             description: 'The video was watched or not'
         }
-    }
-});
+    },
+    outputFields: {
+        video: {
+            type: videoType
+        }
+
+    },
+    mutateAndGetPayload: (args) => new Promise((resolve, reject) => {
+        Promise.resolve(createVideo(args))
+            .then((video) => resolve ({ video }))
+            .catch(reject);
+    })
+})
 
 const mutationType = new GraphQLObjectType({
     name: 'Mutation',
     description: 'The root mutation type',
     fields: {
-        createVideo: {
-            type: videoType,
-            args: {
-                video: {
-                    type: new GraphQLNonNull(videoInputType)
-                }
-            },
-            resolve: (_, args) => { return createVideo(args.video); }
-        }
+        createVideo: videoMutation
     }
-
 });
 
 const schema = new GraphQLSchema({
