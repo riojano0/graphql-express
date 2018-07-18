@@ -1,3 +1,5 @@
+const { groupKTService } = require('../common/groupKTService');
+
 const videoA = {
     id: '1',
     title: 'video A',
@@ -39,11 +41,28 @@ const createVideo = ({ title, duration, watched }) => {
 const getObjectById = (type, id) => {
     const types = {
         video: getVideoById,
+        country: getCountryById,
     };
 
     return types[type](id);
 };
 
+const getCountries = () => new Promise((resolve) => {
+    resolve(groupKTService.getAllCountries());
+});
+
+const getCountryById = (id) => new Promise((resolve) =>{
+    getCountries().then((countries) => {
+        const [country] = countries.filter((country) => {
+            return country.id === id.toLowerCase();
+        });
+        resolve(country);
+    })
+    
+});
+
+exports.getCountries = getCountries;
+exports.getCountryById = getCountryById;
 exports.getVideoById = getVideoById;
 exports.getVideos = getVideos;
 exports.createVideo = createVideo;

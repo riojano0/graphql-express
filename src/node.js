@@ -10,9 +10,12 @@ const { nodeInterface, nodeField } = nodeDefinitions(
         return getObjectById(type.toLowerCase(), id);
     },
     (object) => {
-        const { videoType } = require('../');
+        const { videoType, countryType } = require('./schema');
         if(object.title) {
             return videoType;
+        }
+        if(object.alpha2_code) {
+            return countryType;
         }
 
         return null;
